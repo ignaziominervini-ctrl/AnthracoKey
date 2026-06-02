@@ -1,0 +1,1033 @@
+<!--
+  AnthracoKey v0.9-beta — Data-driven Dichotomous Key Generator for Anthracology
+  Companion tool to AnthracoForm. Builds region-specific keys from charcoal
+  determination CSVs (empirical IAWA profiles).
+
+  DEVELOPMENT VERSION — validated on synthetic data; empirical validation in progress.
+
+  Copyright (c) 2026 Ignazio Minervini / CASEs Research Group, Universitat Pompeu Fabra
+  Released under the MIT License. See LICENSE file for details.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AnthracoKey</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;1,400&family=Crimson+Pro:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --parch:#e4ddd0;--ivory:#f0ebe0;--paper:#faf7f1;
+  --ink:#1b2418;--ink2:#3a4c3c;--ink3:#657261;
+  --forest:#253f2e;--fern:#3a7050;
+  --fg:rgba(58,112,80,.12);--fb:rgba(58,112,80,.30);
+  --clay:#7a2f12;--cg:rgba(122,47,18,.11);--cb:rgba(122,47,18,.28);
+  --gold:#9a6a14;--goldbg:rgba(154,106,20,.12);--goldbr:rgba(154,106,20,.35);
+  --wire:#c2b79e;--wire2:#d6cdbb;
+  --serif:'Playfair Display',Georgia,serif;
+  --prose:'Crimson Pro',Georgia,serif;
+  --mono:'IBM Plex Mono','Cascadia Code',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--parch);color:var(--ink);font-family:var(--prose);font-size:15px;line-height:1.5;height:100vh;overflow:hidden;display:flex;flex-direction:column;}
+button,input,textarea,select{font-family:inherit;}
+button{cursor:pointer;}
+
+/* HEADER */
+#hdr{background:var(--forest);color:#d8eedd;height:48px;display:flex;align-items:center;gap:12px;padding:0 18px;flex-shrink:0;border-bottom:2px solid rgba(0,0,0,.22);}
+.h-logo{font-family:var(--serif);font-size:16px;font-weight:500;letter-spacing:.02em;white-space:nowrap;opacity:.95;display:flex;align-items:center;gap:8px;}
+.h-logo-mark{width:22px;height:22px;background:rgba(255,255,255,.15);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;}
+.h-div{width:1px;height:24px;background:rgba(255,255,255,.2);}
+#h-name{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:4px;color:#eafff0;font-family:var(--mono);font-size:13px;padding:4px 10px;outline:none;width:230px;transition:border-color .15s;}
+#h-name:focus{border-color:rgba(255,255,255,.45);}
+.h-prog{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11px;opacity:.75;}
+.h-pbar{width:90px;height:3px;background:rgba(255,255,255,.18);border-radius:2px;}
+.h-pfill{height:100%;background:#7ec4a0;border-radius:2px;transition:width .4s;}
+.h-sp{flex:1;}
+.hb{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:4px;color:#c8e4d0;padding:5px 12px;font-family:var(--mono);font-size:11px;font-weight:500;transition:all .12s;white-space:nowrap;}
+.hb:hover{background:rgba(255,255,255,.2);}
+.hb.ok{background:rgba(126,196,160,.2);border-color:rgba(126,196,160,.45);color:#a0dcb8;}
+.hb:disabled{opacity:.3;cursor:not-allowed;}
+
+#app{flex:1;display:flex;overflow:hidden;}
+
+/* ─── SETUP ─── */
+#p-setup{flex:1;overflow-y:auto;padding:34px 20px;display:flex;flex-direction:column;align-items:center;gap:20px;}
+.s-intro{text-align:center;}
+.s-intro h1{font-family:var(--serif);font-size:30px;font-weight:500;color:var(--forest);margin-bottom:6px;}
+.s-intro p{font-family:var(--prose);font-size:15px;color:var(--ink3);font-style:italic;max-width:560px;}
+.s-card{background:var(--paper);border:1px solid var(--wire2);border-radius:9px;padding:22px 26px;width:100%;max-width:720px;}
+.s-card-hd{font-family:var(--serif);font-size:15px;font-weight:600;color:var(--forest);margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--wire2);display:flex;align-items:center;gap:8px;}
+.s-row{margin-bottom:15px;}
+.s-lbl{display:block;font-family:var(--mono);font-size:10px;font-weight:500;color:var(--ink3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px;}
+.s-inp{width:100%;background:var(--ivory);border:1px solid var(--wire);border-radius:5px;color:var(--ink);padding:9px 12px;font-family:var(--prose);font-size:14px;outline:none;transition:border-color .12s;}
+.s-inp:focus{border-color:var(--fern);}
+.drop{border:2px dashed var(--wire);border-radius:8px;padding:26px;text-align:center;background:var(--ivory);transition:all .15s;cursor:pointer;}
+.drop.hover{border-color:var(--fern);background:var(--fg);}
+.drop-ic{font-size:30px;opacity:.5;margin-bottom:8px;}
+.drop-t{font-family:var(--prose);font-size:15px;color:var(--ink2);}
+.drop-s{font-family:var(--mono);font-size:11px;color:var(--ink3);margin-top:5px;}
+.params{display:flex;gap:18px;}
+.params .s-row{flex:1;margin-bottom:0;}
+.range-wrap{display:flex;align-items:center;gap:10px;}
+.range-wrap input[type=range]{flex:1;accent-color:var(--fern);}
+.range-val{font-family:var(--mono);font-size:13px;color:var(--forest);font-weight:500;min-width:48px;text-align:right;}
+.s-start{background:var(--forest);color:#cce8d8;border:none;border-radius:7px;padding:13px 40px;font-family:var(--serif);font-size:18px;font-weight:500;transition:all .15s;}
+.s-start:hover{background:#1c3325;}
+.s-start:disabled{opacity:.35;cursor:not-allowed;}
+.taxa-report{margin-top:4px;}
+.tr-row{display:flex;align-items:center;gap:10px;padding:5px 8px;border-bottom:1px solid var(--wire2);font-size:13px;}
+.tr-row:last-child{border-bottom:none;}
+.tr-name{font-family:var(--prose);font-style:italic;color:var(--ink);flex:1;}
+.tr-name.fam{font-style:normal;font-weight:500;}
+.tr-n{font-family:var(--mono);font-size:11px;color:var(--ink3);}
+.tr-prof{font-family:var(--mono);font-size:10px;color:var(--fern);}
+.tr-drop{font-family:var(--mono);font-size:10px;color:var(--clay);opacity:.7;}
+.s-msg{font-family:var(--prose);font-size:13px;font-style:italic;color:var(--clay);padding:8px 0;}
+.s-ok{color:var(--fern);}
+.saved-keys{display:flex;flex-wrap:wrap;gap:6px;}
+.skey{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:14px;border:1px solid var(--wire);background:var(--ivory);font-family:var(--mono);font-size:11px;color:var(--ink2);transition:all .12s;}
+.skey:hover{border-color:var(--fern);color:var(--forest);}
+.skey button{background:none;border:none;color:var(--ink3);font-size:11px;padding:0;opacity:.6;}
+.skey button:hover{opacity:1;color:var(--clay);}
+
+/* ─── BUILD ─── */
+#p-build{flex:1;display:flex;overflow:hidden;}
+#bcol{width:56%;border-right:1px solid var(--wire);display:flex;flex-direction:column;overflow:hidden;background:var(--ivory);}
+#tcol{width:44%;display:flex;flex-direction:column;overflow:hidden;background:var(--paper);}
+.bs{border-bottom:1px solid var(--wire2);padding:11px 15px;flex-shrink:0;}
+.bsh{font-family:var(--mono);font-size:9.5px;font-weight:500;color:var(--ink3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:7px;display:flex;align-items:center;gap:6px;}
+.scope-chips{display:flex;flex-wrap:wrap;gap:4px;}
+.sc{padding:3px 9px;border-radius:12px;font-size:12px;font-style:italic;font-family:var(--prose);background:var(--fg);border:1px solid var(--fb);color:var(--forest);}
+.sc.fam{font-style:normal;font-weight:500;}
+.scope-note{font-size:12px;color:var(--ink3);margin-top:5px;font-style:italic;font-family:var(--prose);}
+
+#char-wrap{border-bottom:1px solid var(--wire2);overflow-y:auto;flex:0 0 auto;max-height:240px;}
+.ct-head{display:flex;align-items:center;gap:6px;padding:8px 15px 6px;background:var(--ivory);position:sticky;top:0;z-index:2;border-bottom:1px solid var(--wire2);}
+.ct-hd-lbl{font-family:var(--mono);font-size:9.5px;font-weight:500;color:var(--ink3);text-transform:uppercase;letter-spacing:.07em;flex:1;}
+.ct-filter{display:flex;gap:4px;}
+.ctfb{background:none;border:1px solid var(--wire);border-radius:3px;padding:2px 7px;font-family:var(--mono);font-size:9px;color:var(--ink2);transition:all .1s;}
+.ctfb:hover{border-color:var(--fern);color:var(--fern);}
+.ctfb.on{background:var(--fg);border-color:var(--fb);color:var(--fern);}
+table.ct{width:100%;border-collapse:collapse;font-size:13px;}
+table.ct th{text-align:left;font-family:var(--mono);font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);padding:5px 8px;border-bottom:1px solid var(--wire2);}
+table.ct td{padding:5px 8px;border-bottom:1px solid var(--wire2);}
+table.ct tr:last-child td{border-bottom:none;}
+table.ct tbody tr{cursor:pointer;transition:background .1s;}
+table.ct tbody tr:hover{background:rgba(58,112,80,.06);}
+table.ct tbody tr.cr{background:rgba(122,47,18,.08)!important;}
+table.ct tbody tr.sug{background:var(--goldbg)!important;}
+.sug-badge{font-family:var(--mono);font-size:8.5px;font-weight:500;color:var(--gold);background:var(--goldbg);border:1px solid var(--goldbr);border-radius:3px;padding:1px 5px;margin-left:5px;}
+.ccode{font-family:var(--mono);font-weight:500;font-size:12px;color:var(--ink2);}
+.clbl{color:var(--ink);font-family:var(--prose);line-height:1.3;}
+.csec{display:inline-block;font-family:var(--mono);font-size:9px;font-weight:500;padding:1px 5px;border-radius:3px;letter-spacing:.03em;}
+.csec.TRV{background:rgba(26,82,48,.12);color:#1a5230;border:1px solid rgba(26,82,48,.22);}
+.csec.TAN{background:rgba(26,52,92,.12);color:#1a3450;border:1px solid rgba(26,52,92,.22);}
+.csec.RAD{background:rgba(92,52,26,.12);color:#5c3418;border:1px solid rgba(92,52,26,.22);}
+.csplit{white-space:nowrap;font-family:var(--mono);font-size:11px;color:var(--ink3);}
+.csbar{display:flex;align-items:center;gap:4px;}
+.sb{width:40px;height:4px;background:var(--wire2);border-radius:2px;overflow:hidden;}
+.sf{height:100%;border-radius:2px;}
+.ct-empty{padding:16px;text-align:center;color:var(--ink3);font-style:italic;font-size:13px;}
+
+#split-ed{flex:1;overflow-y:auto;padding:13px 15px;}
+.se-codes{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px;min-height:26px;align-items:center;}
+.sc-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:12px;font-family:var(--mono);font-size:11px;background:var(--cg);border:1px solid var(--cb);color:var(--clay);}
+.sc-pill button{background:none;border:none;color:var(--clay);font-size:11px;line-height:1;padding:0;opacity:.7;}
+.sc-pill button:hover{opacity:1;}
+.se-none{font-size:12px;color:var(--ink3);font-style:italic;font-family:var(--prose);}
+.br-ed{display:flex;flex-direction:column;gap:5px;margin-bottom:12px;}
+.br-hd{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.06em;}
+.br-hd.a{color:var(--fern);}
+.br-hd.b{color:var(--clay);}
+.br-count{background:rgba(0,0,0,.06);border-radius:3px;padding:1px 5px;font-size:9px;}
+.br-taxa{display:flex;flex-wrap:wrap;gap:4px;min-height:24px;}
+.bt{padding:2px 9px;border-radius:12px;font-size:12px;font-style:italic;font-family:var(--prose);cursor:pointer;transition:all .12s;user-select:none;}
+.bt.as{background:var(--fg);border:1px solid var(--fb);color:var(--forest);}
+.bt.bs{background:var(--cg);border:1px solid var(--cb);color:var(--clay);}
+.bt.as:hover{background:var(--fern);color:#fff;border-color:var(--fern);}
+.bt.bs:hover{background:var(--clay);color:#fff;border-color:var(--clay);}
+.bt.fam{font-style:normal;font-weight:500;}
+.br-empty{font-size:12px;color:var(--wire);font-style:italic;padding:2px 0;}
+.br-txt{width:100%;background:var(--paper);border:1px solid var(--wire);border-radius:4px;color:var(--ink);padding:7px 10px;font-family:var(--prose);font-size:14px;outline:none;resize:none;height:46px;transition:border-color .12s;}
+.br-txt.at:focus{border-color:var(--fern);}
+.br-txt.bt2:focus{border-color:var(--clay);}
+.se-hint{font-size:12px;color:var(--ink3);font-style:italic;font-family:var(--prose);margin-bottom:10px;}
+.se-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.confirm{background:var(--forest);color:#cce8d8;border:none;border-radius:6px;padding:9px 22px;font-family:var(--prose);font-size:14px;transition:all .12s;}
+.confirm:hover{background:#1c3325;}
+.confirm:disabled{opacity:.35;cursor:not-allowed;}
+.clr{background:none;border:1px solid var(--wire);border-radius:6px;padding:8px 14px;font-size:13px;color:var(--ink2);font-family:var(--prose);transition:all .12s;}
+.clr:hover{border-color:var(--clay);color:var(--clay);}
+.indist-btn{background:var(--goldbg);border:1px solid var(--goldbr);color:var(--gold);border-radius:6px;padding:8px 16px;font-size:13px;font-family:var(--prose);}
+.indist-btn:hover{background:rgba(154,106,20,.2);}
+
+/* TREE PANEL */
+.tree-hd{background:var(--paper);border-bottom:1px solid var(--wire2);padding:10px 18px;display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.tree-hd h3{font-family:var(--serif);font-weight:500;font-size:14px;color:var(--ink2);flex:1;}
+.tree-body{flex:1;overflow-y:auto;padding:16px 18px;}
+.tree-empty{color:var(--ink3);font-style:italic;font-family:var(--prose);font-size:13px;text-align:center;padding-top:50px;}
+.kc{margin-bottom:7px;}
+.kc.bld{background:rgba(122,47,18,.04);border-radius:5px;padding:4px 4px 4px 0;margin-left:-4px;}
+.kc-top{display:flex;align-items:baseline;gap:7px;margin-bottom:2px;}
+.kn{font-family:var(--serif);font-size:17px;font-weight:500;color:var(--forest);min-width:22px;}
+.kc.bld .kn{color:var(--clay);}
+.klbl{font-family:var(--mono);font-size:9px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;}
+.kbr{display:flex;align-items:flex-start;gap:5px;padding:2px 0 2px 26px;}
+.kbl{font-family:var(--mono);font-size:10px;font-weight:500;flex-shrink:0;margin-top:2px;}
+.kbl.a{color:var(--fern);}
+.kbl.b{color:var(--clay);}
+.kbt{color:var(--ink);font-family:var(--prose);font-size:13px;line-height:1.4;flex:1;}
+.kbr2{font-style:italic;color:var(--clay);font-size:12px;margin-left:3px;}
+.kbn{font-family:var(--mono);font-size:11px;color:var(--ink3);margin-left:3px;white-space:nowrap;}
+.kbr2.indist{color:var(--gold);}
+.kpend{padding:4px 8px 4px 26px;font-size:12px;font-family:var(--mono);color:var(--ink3);opacity:.45;}
+.ksep{border:none;border-top:1px dashed var(--wire2);margin:5px 0;}
+.kc.bld .kbr .kbt{color:var(--ink3);font-style:italic;}
+.k-building-label{font-family:var(--mono);font-size:9px;color:var(--clay);background:var(--cg);border:1px solid var(--cb);border-radius:3px;padding:1px 6px;margin-left:auto;}
+
+/* DONE */
+#p-done{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+.done-hd{background:var(--paper);border-bottom:1px solid var(--wire2);padding:13px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0;}
+.done-hd h2{font-family:var(--serif);font-weight:500;font-size:18px;color:var(--forest);flex:1;}
+.done-body{flex:1;overflow-y:auto;padding:20px 22px;display:flex;gap:18px;}
+.done-tree{flex:1;background:var(--paper);border:1px solid var(--wire2);border-radius:8px;padding:20px;}
+.done-tree-hd{font-family:var(--serif);font-size:15px;font-weight:500;color:var(--ink2);margin-bottom:14px;}
+.done-side{width:280px;display:flex;flex-direction:column;gap:12px;flex-shrink:0;}
+.exp-card{background:var(--paper);border:1px solid var(--wire2);border-radius:8px;padding:16px;}
+.exp-card h4{font-family:var(--serif);font-size:14px;font-weight:500;color:var(--forest);margin-bottom:10px;}
+.exp-card p{font-size:13px;color:var(--ink3);margin-bottom:10px;font-style:italic;}
+.expb{display:block;width:100%;background:var(--forest);color:#cce8d8;border:none;border-radius:5px;padding:9px;font-family:var(--prose);font-size:14px;margin-bottom:7px;transition:all .12s;text-align:center;}
+.expb:hover{background:#1c3325;}
+.expb.sec{background:none;border:1px solid var(--wire);color:var(--ink2);margin-bottom:0;}
+.expb.sec:hover{border-color:var(--forest);color:var(--forest);}
+
+/* NAVIGATOR (use mode) */
+#p-nav{flex:1;display:flex;flex-direction:column;overflow:hidden;align-items:center;}
+.nav-wrap{max-width:680px;width:100%;padding:28px 20px;display:flex;flex-direction:column;gap:16px;overflow-y:auto;}
+.nav-hd{display:flex;align-items:center;gap:12px;}
+.nav-hd h2{font-family:var(--serif);font-weight:500;font-size:20px;color:var(--forest);flex:1;}
+.nav-crumb{display:flex;flex-wrap:wrap;gap:5px;font-family:var(--mono);font-size:11px;color:var(--ink3);}
+.nav-crumb span{background:var(--ivory);border:1px solid var(--wire2);border-radius:3px;padding:1px 7px;}
+.nav-couplet{background:var(--paper);border:1px solid var(--wire2);border-radius:9px;padding:22px;}
+.nav-q{font-family:var(--serif);font-size:16px;color:var(--ink2);margin-bottom:16px;}
+.nav-choices{display:flex;flex-direction:column;gap:10px;}
+.nav-ch{display:flex;align-items:center;gap:12px;padding:14px 16px;border:1px solid var(--wire);border-radius:7px;background:var(--ivory);transition:all .12s;text-align:left;width:100%;}
+.nav-ch:hover{border-color:var(--fern);background:var(--fg);}
+.nav-ch-k{font-family:var(--mono);font-size:11px;font-weight:500;color:var(--fern);}
+.nav-ch-t{flex:1;font-family:var(--prose);font-size:15px;color:var(--ink);}
+.nav-result{background:var(--fg);border:1px solid var(--fb);border-radius:9px;padding:26px;text-align:center;}
+.nav-result .lbl{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink3);margin-bottom:8px;}
+.nav-result .taxon{font-family:var(--serif);font-size:24px;font-style:italic;color:var(--forest);}
+.nav-result .taxon.indist{font-style:normal;font-size:18px;}
+.nav-result.indist{background:var(--goldbg);border-color:var(--goldbr);}
+
+#modal{display:none;position:fixed;inset:0;background:rgba(27,36,24,.5);z-index:300;align-items:center;justify-content:center;}
+#modal.open{display:flex;}
+.mbox{background:var(--paper);border:1px solid var(--wire);border-radius:10px;width:640px;max-height:82vh;display:flex;flex-direction:column;box-shadow:0 14px 60px rgba(0,0,0,.25);}
+.mhd{padding:14px 18px;border-bottom:1px solid var(--wire2);display:flex;align-items:center;}
+.mhd h3{font-family:var(--serif);font-weight:500;font-size:17px;flex:1;}
+.mclose{background:none;border:none;font-size:20px;color:var(--ink3);padding:0 4px;line-height:1;}
+.mbody{padding:16px 18px;overflow-y:auto;flex:1;}
+.eta{width:100%;height:360px;resize:none;background:var(--parch);border:1px solid var(--wire);border-radius:5px;padding:12px;font-family:var(--mono);font-size:11.5px;color:var(--ink);line-height:1.65;outline:none;}
+.mft{padding:12px 18px;border-top:1px solid var(--wire2);display:flex;gap:8px;justify-content:flex-end;}
+.mft button{padding:7px 16px;border-radius:5px;font-size:13px;font-family:var(--prose);}
+.mcopy{background:var(--forest);color:#cce8d8;border:none;}
+.mcancel{background:none;border:1px solid var(--wire);color:var(--ink2);}
+::-webkit-scrollbar{width:6px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--wire);border-radius:3px;}
+</style>
+</head>
+<body>
+
+<div id="hdr">
+  <div class="h-logo"><span class="h-logo-mark">🗝</span> AnthracoKey</div>
+  <div class="h-div"></div>
+  <input type="text" id="h-name" placeholder="KEY_AREA_NK" value="">
+  <div class="h-div"></div>
+  <div class="h-prog" id="h-prog" style="display:none">
+    <span id="h-step">Step 0</span>
+    <div class="h-pbar"><div class="h-pfill" id="h-pfill" style="width:0%"></div></div>
+    <span id="h-queue"></span>
+  </div>
+  <div class="h-sp"></div>
+  <button class="hb" id="btn-undo" style="display:none" onclick="undoLast()">↩ Undo</button>
+  <button class="hb ok" id="btn-export" style="display:none" onclick="openExport()">↗ Export</button>
+  <button class="hb" id="btn-navigate" style="display:none" onclick="enterNav()">🧭 Use key</button>
+  <button class="hb" onclick="newKey()">New key</button>
+</div>
+
+<div id="app">
+  <div id="p-setup"></div>
+
+  <div id="p-build" style="display:none">
+    <div id="bcol">
+      <div class="bs" id="scope-sec"></div>
+      <div id="char-wrap">
+        <div class="ct-head">
+          <span class="ct-hd-lbl">Discriminating characters — ★ = algorithm's suggestion</span>
+          <div class="ct-filter">
+            <button class="ctfb on" data-sec="ALL" onclick="setSecFilter(this,'ALL')">All</button>
+            <button class="ctfb" data-sec="TRV" onclick="setSecFilter(this,'TRV')">TRV</button>
+            <button class="ctfb" data-sec="TAN" onclick="setSecFilter(this,'TAN')">TAN</button>
+            <button class="ctfb" data-sec="RAD" onclick="setSecFilter(this,'RAD')">RAD</button>
+          </div>
+        </div>
+        <div id="ctable"></div>
+      </div>
+      <div id="split-ed"></div>
+    </div>
+    <div id="tcol">
+      <div class="tree-hd">
+        <h3 id="tree-title">Key tree</h3>
+        <span id="tree-stats" style="font-family:var(--mono);font-size:11px;color:var(--ink3);"></span>
+      </div>
+      <div class="tree-body" id="tree-body"></div>
+    </div>
+  </div>
+
+  <div id="p-done" style="display:none"></div>
+  <div id="p-nav" style="display:none"></div>
+</div>
+
+<div id="modal">
+  <div class="mbox">
+    <div class="mhd"><h3 id="modal-title">Export</h3><button class="mclose" onclick="closeModal()">✕</button></div>
+    <div class="mbody"><textarea class="eta" id="modal-ta" readonly></textarea></div>
+    <div class="mft">
+      <button class="mcopy" onclick="copyExport()">Copy to clipboard</button>
+      <button class="mcancel" onclick="closeModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="file-input" accept=".csv" multiple style="display:none">
+<input type="file" id="json-input" accept=".json" style="display:none">
+
+<script>
+// ════════════════════════════════════════════════════════════════════════
+//  CHARACTER INDEX (IAWA code -> label, section, group)  — from Wheeler 1989
+// ════════════════════════════════════════════════════════════════════════
+const CI={};
+function addC(arr,sec){arr.forEach(g=>g.d.forEach(f=>{if(!CI[f.c])CI[f.c]={l:f.l,s:sec,g:g.g};}));}
+addC([
+  {g:'Growth rings',d:[{c:1,l:'growth ring boundaries distinct'},{c:2,l:'growth ring boundaries indistinct or absent'}]},
+  {g:'Porosity',d:[{c:3,l:'ring-porous'},{c:4,l:'semi-ring-porous'},{c:5,l:'diffuse-porous'}]},
+  {g:'Vessel arrangement',d:[{c:6,l:'vessels in tangential bands'},{c:7,l:'vessels in diagonal/radial pattern'},{c:9,l:'vessels exclusively solitary (≥90%)'},{c:10,l:'radial multiples of 4+ common'},{c:11,l:'vessel clusters common'},{c:12,l:'solitary vessels outline angular'},{c:45,l:'vessels of two distinct diameter classes'}]},
+  {g:'Vessel contents',d:[{c:56,l:'tyloses common'}]},
+  {g:'Fibres',d:[{c:68,l:'fibres very thin-walled'},{c:69,l:'fibres thin- to thick-walled'},{c:70,l:'fibres very thick-walled'}]},
+  {g:'Axial parenchyma',d:[{c:76,l:'axial parenchyma diffuse'},{c:77,l:'axial parenchyma diffuse-in-aggregates'},{c:78,l:'axial parenchyma scanty paratracheal'},{c:79,l:'axial parenchyma vasicentric'},{c:80,l:'axial parenchyma aliform'},{c:81,l:'axial parenchyma lozenge-aliform'},{c:82,l:'axial parenchyma winged-aliform'},{c:83,l:'axial parenchyma confluent'},{c:84,l:'axial parenchyma unilateral paratracheal'},{c:85,l:'axial parenchyma bands >3 cells wide'},{c:86,l:'axial parenchyma narrow bands ≤3 cells wide'},{c:89,l:'axial parenchyma in marginal bands'}]},
+],'TRV');
+addC([
+  {g:'Fibres',d:[{c:61,l:'libriform fibres (simple/minutely bordered pits)'}]},
+  {g:'Parenchyma strand',d:[{c:90,l:'parenchyma fusiform'},{c:91,l:'parenchyma 2 cells/strand'},{c:92,l:'parenchyma 3–4 cells/strand'},{c:93,l:'parenchyma 5–8 cells/strand'},{c:94,l:'parenchyma >8 cells/strand'}]},
+  {g:'Ray width',d:[{c:96,l:'rays exclusively uniseriate'},{c:97,l:'ray width 1–3 cells'},{c:98,l:'larger rays 4–10-seriate'},{c:99,l:'larger rays >10-seriate'},{c:100,l:'multiseriate portions as wide as uniseriate'}]},
+  {g:'Ray size/structure',d:[{c:102,l:'ray height >1 mm'},{c:103,l:'rays of two distinct sizes'},{c:110,l:'sheath cells present'}]},
+  {g:'Storied structure',d:[{c:118,l:'all rays storied'},{c:119,l:'low rays storied, high non-storied'},{c:120,l:'axial parenchyma / vessel elements storied'},{c:121,l:'fibres storied'}]},
+  {g:'Crystals',d:[{c:136,l:'prismatic crystals present'}]},
+],'TAN');
+addC([
+  {g:'Perforation plates',d:[{c:13,l:'perforation plates simple'},{c:14,l:'perforation plates scalariform'}]},
+  {g:'Intervessel pits — type',d:[{c:20,l:'intervessel pits scalariform'},{c:21,l:'intervessel pits opposite'},{c:22,l:'intervessel pits alternate'},{c:23,l:'intervessel pits polygonal'}]},
+  {g:'Intervessel pits — size',d:[{c:24,l:'intervessel pits minute ≤4 μm'},{c:25,l:'intervessel pits small 4–7 μm'},{c:26,l:'intervessel pits medium 7–10 μm'},{c:27,l:'intervessel pits large ≥10 μm'},{c:29,l:'vestured pits'}]},
+  {g:'Vessel-ray pits',d:[{c:30,l:'vessel-ray pits with distinct borders'},{c:31,l:'vessel-ray pits reduced: rounded/angular'},{c:32,l:'vessel-ray pits reduced: horizontal/scalariform'},{c:33,l:'vessel-ray pits of two distinct sizes'}]},
+  {g:'Fibres — pits',d:[{c:60,l:'vascular/vasicentric tracheids'},{c:62,l:'fibres with distinctly bordered pits'},{c:63,l:'fibre pits on both radial and tangential walls'},{c:65,l:'septate fibres present'},{c:66,l:'non-septate fibres present'}]},
+  {g:'Ray cells',d:[{c:104,l:'all ray cells procumbent'},{c:105,l:'all ray cells upright and/or square'},{c:106,l:'procumbent with 1 row upright/sq marginal cells'},{c:107,l:'procumbent with 2–4 rows upright/sq marginal cells'},{c:108,l:'procumbent with >4 rows upright/sq marginal cells'},{c:109,l:'procumbent, square and upright cells mixed throughout'}]},
+  {g:'Crystals in rays',d:[{c:137,l:'prismatic crystals in upright/sq ray cells'},{c:138,l:'prismatic crystals in procumbent ray cells'},{c:142,l:'prismatic crystals in chambered axial parenchyma'},{c:143,l:'prismatic crystals in fibres'}]},
+],'RAD');
+function clbl(c){return CI[c]?CI[c].l:('IAWA '+c);}
+function csec(c){return CI[c]?CI[c].s:'';}
+
+// ════════════════════════════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════════════════════════════
+let S={
+  phase:'setup',           // setup | build | done | nav
+  keyName:'',
+  area:'',
+  Nmin:3, theta:0.60,
+  records:[],              // parsed CSV rows (all sites merged)
+  sites:[],                // [{name, frags}] loaded site summary
+  profiles:{},             // taxon -> Set(codes)  (empirical, >=theta)
+  taxonN:{},               // taxon -> fragment count
+  totalFrags:0,            // qualifying fragments (for naming)
+  // build
+  nodes:{}, root:null, nc:0, qc:0,
+  queue:[], cur:null, history:[],
+  activeCodes:[], aTaxa:[], bTaxa:[],
+  secFilter:'ALL',
+  // nav
+  navPath:[], navCur:null,
+};
+
+// ════════════════════════════════════════════════════════════════════════
+//  CSV PARSING
+// ════════════════════════════════════════════════════════════════════════
+function detectDelim(line){
+  const s=(line.match(/;/g)||[]).length, c=(line.match(/,/g)||[]).length;
+  return s>=c?';':',';
+}
+function parseCSV(text){
+  text=text.replace(/^\uFEFF/,'');
+  const lines=text.split(/\r\n|\n|\r/).filter(l=>l.length>0);
+  if(!lines.length) return {cols:[],rows:[]};
+  const delim=detectDelim(lines[0]);
+  const splitLine=(line)=>{
+    const out=[];let cur='';let q=false;
+    for(let i=0;i<line.length;i++){
+      const ch=line[i];
+      if(q){ if(ch==='"'){ if(line[i+1]==='"'){cur+='"';i++;} else q=false; } else cur+=ch; }
+      else { if(ch==='"')q=true; else if(ch===delim){out.push(cur);cur='';} else cur+=ch; }
+    }
+    out.push(cur); return out;
+  };
+  const cols=splitLine(lines[0]).map(c=>c.trim());
+  const rows=[];
+  for(let i=1;i<lines.length;i++){
+    const vals=splitLine(lines[i]);
+    const o={}; cols.forEach((c,j)=>o[c]=(vals[j]!==undefined?vals[j]:'').trim());
+    rows.push(o);
+  }
+  return {cols,rows};
+}
+
+// ════════════════════════════════════════════════════════════════════════
+//  PROFILE COMPUTATION  (empirical, theta threshold, Nmin filter)
+// ════════════════════════════════════════════════════════════════════════
+function isCountable(d){
+  d=(d||'').trim();
+  if(!d||d==='undetermined') return false;
+  if(d.indexOf('/')>=0) return false;
+  return true;
+}
+function computeProfiles(){
+  const rows=S.records;
+  // discover iawa_X columns present
+  const sample=rows[0]||{};
+  const iawaCols=Object.keys(sample).filter(k=>/^iawa_\d+$/.test(k));
+  const codes=iawaCols.map(k=>parseInt(k.split('_')[1])).filter(c=>!isNaN(c));
+  // group countable records by taxon
+  const byTax={};
+  for(const r of rows){
+    const d=(r.det||'').trim();
+    if(!isCountable(d)) continue;
+    (byTax[d]=byTax[d]||[]).push(r);
+  }
+  const profiles={}, taxonN={}; let total=0;
+  for(const tax in byTax){
+    const recs=byTax[tax]; const n=recs.length;
+    if(n<S.Nmin) continue;
+    // does this taxon have ANY iawa data? (skip taxa with all-zero / empty)
+    const cnt={}; let anyData=false;
+    for(const c of codes) cnt[c]=0;
+    for(const r of recs) for(const c of codes){ if((r['iawa_'+c]||'').trim()==='1'){cnt[c]++;anyData=true;} }
+    if(!anyData) continue; // no IAWA coded for this taxon -> excluded
+    const prof=codes.filter(c=>cnt[c]/n>=S.theta).sort((a,b)=>a-b);
+    profiles[tax]=new Set(prof);
+    taxonN[tax]=n;
+    total+=n;
+  }
+  S.profiles=profiles; S.taxonN=taxonN; S.totalFrags=total;
+}
+
+// ════════════════════════════════════════════════════════════════════════
+//  KEY NAMING
+// ════════════════════════════════════════════════════════════════════════
+function fmtN(n){
+  if(n>=1000){ let v=(n/1000).toFixed(1).replace(/\.0$/,''); return v+'K'; }
+  return ''+n;
+}
+function autoName(){
+  const area=(S.area||'AREA').toUpperCase().replace(/[^A-Z0-9]+/g,'_').replace(/^_|_$/g,'');
+  return 'KEY_'+area+'_'+fmtN(S.totalFrags);
+}
+
+// ════════════════════════════════════════════════════════════════════════
+//  GREEDY CANDIDATE RANKING  (semi-automatic suggestion)
+// ════════════════════════════════════════════════════════════════════════
+function rankCandidates(taxa){
+  // taxa: array of taxon names in current scope
+  const N=taxa.length;
+  const codeSet=new Set();
+  taxa.forEach(t=>S.profiles[t].forEach(c=>codeSet.add(c)));
+  const out=[];
+  codeSet.forEach(c=>{
+    let k=0; taxa.forEach(t=>{ if(S.profiles[t].has(c)) k++; });
+    if(k>0 && k<N){
+      out.push({c, k, mk:N-k, score:k*(N-k)});
+    }
+  });
+  out.sort((a,b)=>b.score-a.score || a.c-b.c);
+  return out;
+}
+
+// ════════════════════════════════════════════════════════════════════════
+//  SPLIT LOGIC
+// ════════════════════════════════════════════════════════════════════════
+function computeSplit(){
+  if(!S.cur){S.aTaxa=[];S.bTaxa=[];return;}
+  const all=S.cur.taxa;
+  if(!S.activeCodes.length){S.aTaxa=[];S.bTaxa=[...all];return;}
+  S.aTaxa=[];S.bTaxa=[];
+  all.forEach(t=>{
+    const ts=S.profiles[t];
+    const match=S.activeCodes.every(c=>ts.has(c));
+    if(match)S.aTaxa.push(t); else S.bTaxa.push(t);
+  });
+}
+function applyCode(c){
+  const idx=S.activeCodes.indexOf(c);
+  if(idx>=0)S.activeCodes.splice(idx,1); else S.activeCodes.push(c);
+  computeSplit();
+  const aEl=document.getElementById('atxt');
+  const bEl=document.getElementById('btxt');
+  if(aEl&&!aEl._edited){ aEl.value=S.activeCodes.map(c=>clbl(c)).join('; '); }
+  if(bEl&&!bEl._edited){ if(S.activeCodes.length===1) bEl.value='not '+clbl(S.activeCodes[0]); else bEl.value=''; }
+  renderBuild();
+}
+function removePill(c){ S.activeCodes=S.activeCodes.filter(x=>x!==c);computeSplit();renderBuild(); }
+function toggleTaxon(name){
+  if(S.aTaxa.includes(name)){S.aTaxa=S.aTaxa.filter(n=>n!==name);S.bTaxa.push(name);}
+  else{S.bTaxa=S.bTaxa.filter(n=>n!==name);S.aTaxa.push(name);}
+  renderBuild();
+}
+
+// ════════════════════════════════════════════════════════════════════════
+//  COUPLET CONFIRM / UNDO / INDISTINGUISHABLE
+// ════════════════════════════════════════════════════════════════════════
+function confirmCouplet(){
+  if(!S.cur)return;
+  if(!S.aTaxa.length||!S.bTaxa.length)return;
+  const aEl=document.getElementById('atxt'), bEl=document.getElementById('btxt');
+  const aText=(aEl?aEl.value:'').trim()||'—';
+  const bText=(bEl?bEl.value:'').trim()||'—';
+  const id='n'+(++S.nc);
+  const aLeaf=S.aTaxa.length===1?S.aTaxa[0]:null;
+  const bLeaf=S.bTaxa.length===1?S.bTaxa[0]:null;
+  const nd={id,parentId:S.cur.parentId,parentBranch:S.cur.parentBranch,
+    codes:[...S.activeCodes], aText, bText,
+    aTaxa:[...S.aTaxa], bTaxa:[...S.bTaxa], aLeaf, bLeaf,
+    aGroup:null, bGroup:null, aChild:null, bChild:null};
+  S.nodes[id]=nd;
+  if(!S.root)S.root=id;
+  if(nd.parentId&&S.nodes[nd.parentId])S.nodes[nd.parentId][nd.parentBranch+'Child']=id;
+  const added=[];
+  if(!aLeaf){const q='q'+(++S.qc)+'a';S.queue.push({qid:q,taxa:nd.aTaxa,parentId:id,parentBranch:'a'});added.push(q);}
+  if(!bLeaf){const q='q'+(++S.qc)+'b';S.queue.push({qid:q,taxa:nd.bTaxa,parentId:id,parentBranch:'b'});added.push(q);}
+  S.history.push({type:'split',nodeId:id,added,cur:S.cur});
+  advanceQueue(S.cur.qid);
+}
+function markIndistinguishable(){
+  // current scope cannot be split: record as a terminal group on its parent branch
+  if(!S.cur)return;
+  const grp=[...S.cur.taxa];
+  if(S.cur.parentId && S.nodes[S.cur.parentId]){
+    const p=S.nodes[S.cur.parentId];
+    p[S.cur.parentBranch+'Group']=grp;
+    p[S.cur.parentBranch+'Child']=null;
+    S.history.push({type:'group',parentId:S.cur.parentId,branch:S.cur.parentBranch,cur:S.cur});
+  } else {
+    // whole dataset indistinguishable (degenerate) -> store as pseudo-root group
+    S.rootGroup=grp;
+    S.history.push({type:'rootgroup',cur:S.cur});
+  }
+  advanceQueue(S.cur.qid);
+}
+function advanceQueue(doneQid){
+  S.queue=S.queue.filter(q=>q.qid!==doneQid);
+  S.cur=S.queue[0]||null;
+  S.activeCodes=[];S.aTaxa=[];S.bTaxa=S.cur?[...S.cur.taxa]:[];
+  if(!S.cur)S.phase='done';
+  render();
+}
+function undoLast(){
+  if(!S.history.length)return;
+  const last=S.history.pop();
+  if(last.type==='split'){
+    S.queue=S.queue.filter(q=>!last.added.includes(q.qid));
+    const nd=S.nodes[last.nodeId];
+    if(nd&&nd.parentId&&S.nodes[nd.parentId])S.nodes[nd.parentId][nd.parentBranch+'Child']=null;
+    if(S.root===last.nodeId)S.root=null;
+    delete S.nodes[last.nodeId];
+  } else if(last.type==='group'){
+    const p=S.nodes[last.parentId]; if(p){p[last.branch+'Group']=null;}
+  } else if(last.type==='rootgroup'){ S.rootGroup=null; }
+  S.queue.unshift(last.cur);
+  S.cur=S.queue[0];
+  S.activeCodes=[];S.aTaxa=[];S.bTaxa=[...S.cur.taxa];
+  if(S.phase==='done')S.phase='build';
+  if(S.phase==='nav'){S.phase='done';}
+  render();
+}
+
+// ════════════════════════════════════════════════════════════════════════
+//  NUMBERING + EXPORT
+// ════════════════════════════════════════════════════════════════════════
+function assignNums(){
+  const m={};if(!S.root)return m;let n=1;const q=[S.root];
+  while(q.length){const id=q.shift();m[id]=n++;const nd=S.nodes[id];if(!nd)continue;if(nd.aChild)q.push(nd.aChild);if(nd.bChild)q.push(nd.bChild);}
+  return m;
+}
+function branchDesc(nd,branch,nums){
+  const leaf=nd[branch+'Leaf'], grp=nd[branch+'Group'], child=nd[branch+'Child'];
+  if(grp&&grp.length) return {kind:'group',text:'['+grp.join(', ')+']'};
+  if(leaf) return {kind:'leaf',text:leaf};
+  if(child) return {kind:'next',text:'→ '+(nums[child]||'?')};
+  return {kind:'pending',text:'(pending)'};
+}
+function exportPlain(){
+  const nums=assignNums();
+  const taxaCount=Object.keys(S.profiles).length;
+  const lines=[
+    'AnthracoKey — '+(S.keyName||autoName()),
+    'Phytogeographic unit: '+(S.area||'—'),
+    'Taxa: '+taxaCount+'  ·  Qualifying fragments: '+S.totalFrags+'  ·  N\u2265'+S.Nmin+'  ·  \u03B8='+Math.round(S.theta*100)+'%',
+    '('+Object.keys(S.nodes).length+' couplets)',''
+  ];
+  const bfs=S.root?[S.root]:[];
+  while(bfs.length){
+    const id=bfs.shift();const nd=S.nodes[id];if(!nd)continue;
+    const n=nums[id];
+    const a=branchDesc(nd,'a',nums), b=branchDesc(nd,'b',nums);
+    const fill=(t,d)=>{const pad=Math.max(2,54-t.length-d.length);return t+' '+'.'.repeat(pad)+' '+d;};
+    lines.push(n+'.  a. '+fill(nd.aText,a.text));
+    lines.push('    b. '+fill(nd.bText,b.text));
+    lines.push('');
+    if(nd.aChild)bfs.push(nd.aChild);
+    if(nd.bChild)bfs.push(nd.bChild);
+  }
+  return lines.join('\n');
+}
+function keyJSON(){
+  const nums=assignNums();
+  const couplets=[];
+  const bfs=S.root?[S.root]:[];
+  while(bfs.length){
+    const id=bfs.shift();const nd=S.nodes[id];if(!nd)continue;
+    const mk=(branch)=>{
+      const leaf=nd[branch+'Leaf'],grp=nd[branch+'Group'],child=nd[branch+'Child'];
+      return {text:nd[branch+'Text'], codes:branch==='a'?nd.codes:[],
+        result:leaf||null, group:grp||null, next:child?nums[child]:null};
+    };
+    couplets.push({couplet:nums[id], a:mk('a'), b:mk('b')});
+    if(nd.aChild)bfs.push(nd.aChild);if(nd.bChild)bfs.push(nd.bChild);
+  }
+  return {format:'AnthracoKey-v1', keyName:S.keyName||autoName(), area:S.area,
+    params:{Nmin:S.Nmin,theta:S.theta}, taxa:Object.keys(S.profiles),
+    totalFragments:S.totalFrags, generated:new Date().toISOString(), couplets};
+}
+
+// ════════════════════════════════════════════════════════════════════════
+//  KEY FILES  (no localStorage — JSON files are the single source of truth)
+// ════════════════════════════════════════════════════════════════════════
+function loadKeyFile(file){
+  const r=new FileReader();
+  r.onload=()=>{
+    let k; try{ k=JSON.parse(r.result); }catch(e){ alert('Not a valid AnthracoKey JSON file.'); return; }
+    if(!k||!k.couplets||!k.couplets.length){ alert('This JSON has no couplets.'); return; }
+    const couplets={};
+    k.couplets.forEach(cp=>{ couplets[cp.couplet]={a:cp.a,b:cp.b}; });
+    S.loadedKey={keyName:k.keyName||file.name.replace(/\.json$/i,''),area:k.area||'',couplets,_root:(k.couplets[0]?k.couplets[0].couplet:1)};
+    S.navModel=S.loadedKey;S.navCur=S.loadedKey._root;S.navPath=[];S.navResult=null;
+    S.phase='nav';render();
+  };
+  r.readAsText(file);
+}
+let toastT=null;
+function showToast(msg){
+  let el=document.getElementById('toast');
+  if(!el){el=document.createElement('div');el.id='toast';
+    el.style.cssText='position:fixed;bottom:18px;right:18px;background:var(--forest);color:#cce8d8;padding:9px 16px;border-radius:6px;font-family:var(--mono);font-size:12px;z-index:999;box-shadow:0 6px 20px rgba(0,0,0,.3);transition:opacity .3s;';
+    document.body.appendChild(el);}
+  el.textContent=msg;el.style.opacity='1';
+  clearTimeout(toastT);toastT=setTimeout(()=>el.style.opacity='0',1800);
+}
+
+// ════════════════════════════════════════════════════════════════════════
+//  RENDER — dispatcher
+// ════════════════════════════════════════════════════════════════════════
+function render(){
+  const ph=S.phase;
+  document.getElementById('p-setup').style.display=ph==='setup'?'':'none';
+  document.getElementById('p-build').style.display=ph==='build'?'flex':'none';
+  document.getElementById('p-done').style.display=ph==='done'?'flex':'none';
+  document.getElementById('p-nav').style.display=ph==='nav'?'flex':'none';
+  document.getElementById('btn-undo').style.display=(ph==='build'||ph==='done')&&S.history.length?'':'none';
+  document.getElementById('btn-export').style.display=ph==='done'?'':'none';
+  document.getElementById('btn-navigate').style.display=ph==='done'?'':'none';
+  document.getElementById('h-prog').style.display=ph==='build'?'flex':'none';
+  document.getElementById('h-name').value=S.keyName||'';
+  if(ph==='setup')renderSetup();
+  else if(ph==='build')renderBuild();
+  else if(ph==='done')renderDone();
+  else if(ph==='nav')renderNav();
+}
+
+// ── SETUP ──
+function renderSetup(){
+  const hasData=Object.keys(S.profiles).length>0;
+  let taxaHtml='';
+  if(hasData){
+    const ts=Object.keys(S.profiles).sort((a,b)=>S.taxonN[b]-S.taxonN[a]);
+    taxaHtml='<div class="s-card"><div class="s-card-hd">✓ '+ts.length+' taxa qualify · '+S.totalFrags+' fragments</div><div class="taxa-report">'+
+      ts.map(t=>'<div class="tr-row"><span class="tr-name">'+t+'</span><span class="tr-n">n='+S.taxonN[t]+'</span><span class="tr-prof">'+S.profiles[t].size+' IAWA codes</span></div>').join('')+
+      '</div></div>';
+  }
+  document.getElementById('p-setup').innerHTML=`
+    <div class="s-intro">
+      <h1>AnthracoKey</h1>
+      <p>Build a region-specific dichotomous key from your charcoal determinations.
+      Keys grow more precise as you add more sites from the same phytogeographic unit.</p>
+    </div>
+    <div class="s-card">
+      <div class="s-card-hd">1 · Load determinations (CSV)</div>
+      <div class="drop" id="drop" onclick="document.getElementById('file-input').click()">
+        <div class="drop-ic">📄</div>
+        <div class="drop-t">${S.records.length?('Loaded '+S.records.length+' fragments — click to add or replace'):'Drop one or more site CSVs here, or click to choose'}</div>
+        <div class="drop-s">select several files at once — sites with identical columns are merged automatically</div>
+      </div>
+      ${(S.sites&&S.sites.length)?`<div style="margin-top:10px;">
+        <div style="font-family:var(--mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);margin-bottom:6px;">Loaded sites (${S.sites.length})</div>
+        ${S.sites.map(s=>`<div class="tr-row"><span class="tr-name" style="font-style:normal">${s.name}</span><span class="tr-n">${s.frags} fragments</span></div>`).join('')}
+      </div>`:''}
+    </div>
+    <div class="s-card">
+      <div class="s-card-hd">2 · Phytogeographic unit &amp; parameters</div>
+      <div class="s-row">
+        <label class="s-lbl">Phytogeographic unit / area</label>
+        <input class="s-inp" id="area-inp" placeholder="e.g. Indus, Mediterranean, Near East" value="${S.area}" oninput="onAreaInput(this.value)">
+      </div>
+      <div class="params">
+        <div class="s-row">
+          <label class="s-lbl">Min. fragments per taxon (N)</label>
+          <div class="range-wrap"><input type="range" min="1" max="20" value="${S.Nmin}" oninput="S.Nmin=+this.value;document.getElementById('nv').textContent=this.value;"><span class="range-val" id="nv">${S.Nmin}</span></div>
+        </div>
+        <div class="s-row">
+          <label class="s-lbl">Profile threshold (θ)</label>
+          <div class="range-wrap"><input type="range" min="30" max="90" step="5" value="${Math.round(S.theta*100)}" oninput="S.theta=+this.value/100;document.getElementById('tv').textContent=this.value+'%';"><span class="range-val" id="tv">${Math.round(S.theta*100)}%</span></div>
+        </div>
+      </div>
+      <div style="margin-top:12px;background:var(--ivory);border:1px solid var(--wire2);border-left:3px solid var(--fern);border-radius:5px;padding:10px 13px;font-size:12.5px;line-height:1.55;color:var(--ink2);">
+        <div style="font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);margin-bottom:5px;">What these do — leave the defaults unless you want to experiment</div>
+        <div style="margin-bottom:4px;"><b style="color:var(--forest)">N — min. fragments per taxon.</b> A species is included in the key only if you have determined at least N of its fragments. Higher N = only well-documented taxa. Rare species (seen 1–2 times) are left out until you accumulate more material.</div>
+        <div><b style="color:var(--forest)">θ — profile threshold.</b> An IAWA character belongs to a species' profile only if it appears in at least θ% of that species' fragments. Higher θ = stricter, keeps only constant characters and filters out incidental ones. 60% is a sensible starting point for charcoal.</div>
+      </div>
+      <div style="margin-top:14px;text-align:center;">
+        <button class="s-start" id="btn-compute" ${S.records.length?'':'disabled'} onclick="doCompute()">Compute profiles →</button>
+      </div>
+      <div class="s-msg ${hasData?'s-ok':''}" id="setup-msg"></div>
+    </div>
+    ${taxaHtml}
+    ${hasData?`<div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+        <button class="s-start" onclick="autoGenerate()">⚡ Auto-generate: ${autoName()}</button>
+        <button class="s-start" style="background:none;border:1px solid var(--wire);color:var(--forest)" onclick="startBuild()">Build step-by-step →</button>
+      </div>`:''}
+    <div class="s-card">
+      <div class="s-card-hd">Use an existing key</div>
+      <p style="font-size:13px;color:var(--ink3);font-style:italic;margin-bottom:10px;">Load a previously generated key (JSON file) to navigate it — works on any computer, no browser storage needed.</p>
+      <button class="s-start" style="background:none;border:1px solid var(--wire);color:var(--forest)" onclick="document.getElementById('json-input').click()">📂 Load key file (JSON)</button>
+    </div>
+  `;
+  // drag/drop wiring
+  const drop=document.getElementById('drop');
+  if(drop){
+    drop.ondragover=e=>{e.preventDefault();drop.classList.add('hover');};
+    drop.ondragleave=()=>drop.classList.remove('hover');
+    drop.ondrop=e=>{e.preventDefault();drop.classList.remove('hover');if(e.dataTransfer.files.length)readFiles(e.dataTransfer.files);};
+  }
+}
+function onAreaInput(v){ S.area=v; const b=document.querySelector('#p-setup .s-start[onclick^="startBuild"]'); if(b)b.textContent='Build key: '+autoName()+' →'; }
+function readFiles(fileList){
+  const files=Array.from(fileList);
+  if(!files.length)return;
+  let pending=files.length;
+  const parsed=[]; // {name, rows}
+  files.forEach((file,idx)=>{
+    const r=new FileReader();
+    r.onload=()=>{
+      const {rows}=parseCSV(r.result);
+      parsed[idx]={name:file.name.replace(/\.csv$/i,''),rows};
+      if(--pending===0) mergeLoaded(parsed);
+    };
+    r.readAsText(file);
+  });
+}
+function mergeLoaded(parsed){
+  // merge all rows, renumber id_det globally so duplicate ids across sites never collide
+  let merged=[]; const sites=[]; let gid=0;
+  parsed.filter(Boolean).forEach(p=>{
+    let n=0;
+    p.rows.forEach(row=>{ gid++; row.id_det=String(gid); merged.push(row); n++; });
+    sites.push({name:p.name, frags:n});
+  });
+  S.records=merged; S.sites=sites; S.profiles={};
+  renderSetup();
+  showToast(sites.length>1 ? (sites.length+' sites merged · '+merged.length+' fragments') : ('Loaded '+merged.length+' fragments'));
+}
+// single-file convenience wrapper (kept for any legacy call)
+function readFile(file){ readFiles([file]); }
+function doCompute(){
+  if(!S.records.length)return;
+  computeProfiles();
+  const msg=document.getElementById('setup-msg');
+  const n=Object.keys(S.profiles).length;
+  if(!n){ msg.className='s-msg'; msg.textContent='No taxa qualify. Check that the CSV has IAWA codes (iawa_X=1) and that taxa reach N≥'+S.Nmin+'.'; }
+  renderSetup();
+}
+function startBuild(){
+  const taxa=Object.keys(S.profiles);
+  if(taxa.length<2){alert('Need at least 2 qualifying taxa to build a key.');return;}
+  S.keyName=autoName();
+  S.nodes={};S.root=null;S.nc=0;S.qc=0;S.queue=[];S.history=[];S.rootGroup=null;
+  S.cur={qid:'q0',taxa:[...taxa],parentId:null,parentBranch:null};
+  S.queue=[S.cur];
+  S.activeCodes=[];S.aTaxa=[];S.bTaxa=[...taxa];
+  S.phase='build';
+  render();
+}
+function autoGenerate(){
+  const taxa=Object.keys(S.profiles);
+  if(taxa.length<2){alert('Need at least 2 qualifying taxa to build a key.');return;}
+  S.keyName=autoName();
+  S.nodes={};S.root=null;S.nc=0;S.qc=0;S.queue=[];S.history=[];S.rootGroup=null;
+  S.cur={qid:'q0',taxa:[...taxa],parentId:null,parentBranch:null};
+  S.queue=[S.cur];
+  // run greedy build to completion: always take the ★ suggested character
+  let guard=0;
+  while(S.cur && guard++<2000){
+    const cands=rankCandidates(S.cur.taxa);
+    if(!cands.length){ markIndistinguishable(); continue; }
+    S.activeCodes=[cands[0].c];
+    computeSplit();
+    // auto-fill couplet text from the chosen character
+    const lbl=clbl(cands[0].c);
+    const id='n'+(++S.nc);
+    const aLeaf=S.aTaxa.length===1?S.aTaxa[0]:null;
+    const bLeaf=S.bTaxa.length===1?S.bTaxa[0]:null;
+    const nd={id,parentId:S.cur.parentId,parentBranch:S.cur.parentBranch,
+      codes:[cands[0].c], aText:lbl, bText:'not '+lbl,
+      aTaxa:[...S.aTaxa], bTaxa:[...S.bTaxa], aLeaf, bLeaf,
+      aGroup:null,bGroup:null,aChild:null,bChild:null};
+    S.nodes[id]=nd;
+    if(!S.root)S.root=id;
+    if(nd.parentId&&S.nodes[nd.parentId])S.nodes[nd.parentId][nd.parentBranch+'Child']=id;
+    if(!aLeaf){const q='q'+(++S.qc)+'a';S.queue.push({qid:q,taxa:nd.aTaxa,parentId:id,parentBranch:'a'});}
+    if(!bLeaf){const q='q'+(++S.qc)+'b';S.queue.push({qid:q,taxa:nd.bTaxa,parentId:id,parentBranch:'b'});}
+    S.queue=S.queue.filter(q=>q.qid!==S.cur.qid);
+    S.cur=S.queue[0]||null;
+  }
+  S.history=[]; // automatic build: nothing to undo step-wise
+  S.phase='done';
+  showToast('Key auto-generated — review couplet labels before publishing');
+  render();
+}
+
+// ── BUILD ──
+function setSecFilter(btn,sec){ document.querySelectorAll('.ctfb').forEach(b=>b.classList.remove('on'));btn.classList.add('on');S.secFilter=sec;renderCharTable(); }
+function renderBuild(){
+  // scope
+  const sc=document.getElementById('scope-sec');
+  if(S.cur){
+    sc.innerHTML='<div class="bsh">Separating ('+S.cur.taxa.length+' taxa)</div><div class="scope-chips">'+
+      S.cur.taxa.map(t=>'<span class="sc">'+t+'</span>').join('')+'</div>';
+  } else sc.innerHTML='';
+  // progress
+  const totalNodes=Object.keys(S.nodes).length;
+  const remaining=S.queue.length;
+  document.getElementById('h-step').textContent='Couplet '+(totalNodes+1);
+  document.getElementById('h-queue').textContent=remaining>0?(remaining+' pending'):'';
+  const taxaTotal=Object.keys(S.profiles).length;
+  const pct=taxaTotal>1?Math.round(100*(totalNodes)/(taxaTotal-1)):0;
+  document.getElementById('h-pfill').style.width=Math.min(100,pct)+'%';
+  document.getElementById('btn-undo').style.display=S.history.length?'':'none';
+  renderCharTable();
+  renderSplitEditor();
+  renderTree();
+}
+function renderCharTable(){
+  const wrap=document.getElementById('ctable');
+  if(!S.cur){wrap.innerHTML='';return;}
+  const cands=rankCandidates(S.cur.taxa);
+  const sug=cands.length?cands[0].c:null;
+  const filtered=cands.filter(x=>S.secFilter==='ALL'||csec(x.c)===S.secFilter);
+  if(!filtered.length){
+    wrap.innerHTML='<div class="ct-empty">No '+(S.secFilter==='ALL'?'':S.secFilter+' ')+'character separates these taxa.'+
+      (cands.length?'':' These taxa share an identical IAWA profile — mark them as an indistinguishable group below.')+'</div>';
+    return;
+  }
+  let h='<table class="ct"><thead><tr><th style="width:42px">code</th><th>character</th><th style="width:46px">sec</th><th style="width:90px">split</th></tr></thead><tbody>';
+  filtered.forEach(x=>{
+    const on=S.activeCodes.includes(x.c);
+    const isSug=x.c===sug;
+    const barA=Math.round(100*x.k/(x.k+x.mk));
+    h+='<tr class="'+(on?'cr':'')+(isSug?' sug':'')+'" onclick="applyCode('+x.c+')">'+
+      '<td><span class="ccode">'+x.c+'</span></td>'+
+      '<td><span class="clbl">'+clbl(x.c)+'</span>'+(isSug?'<span class="sug-badge">★ suggested</span>':'')+'</td>'+
+      '<td><span class="csec '+csec(x.c)+'">'+csec(x.c)+'</span></td>'+
+      '<td><div class="csbar"><span class="csplit">'+x.k+'·'+x.mk+'</span><div class="sb"><div class="sf" style="width:'+barA+'%;background:var(--fern)"></div></div></div></td>'+
+      '</tr>';
+  });
+  h+='</tbody></table>';
+  wrap.innerHTML=h;
+}
+function renderSplitEditor(){
+  const ed=document.getElementById('split-ed');
+  if(!S.cur){ed.innerHTML='';return;}
+  const cands=rankCandidates(S.cur.taxa);
+  const canSplit=cands.length>0;
+  const pills=S.activeCodes.length
+    ? S.activeCodes.map(c=>'<span class="sc-pill">IAWA '+c+' · '+clbl(c)+'<button onclick="removePill('+c+')">✕</button></span>').join('')
+    : '<span class="se-none">Click the ★ suggested character above, or pick your own.</span>';
+  const aTxt=S.aTaxa.map(t=>'<span class="bt as" onclick="toggleTaxon(\''+t.replace(/'/g,"\\'")+'\')">'+t+'</span>').join('')||'<span class="br-empty">— move taxa here —</span>';
+  const bTxt=S.bTaxa.map(t=>'<span class="bt bs" onclick="toggleTaxon(\''+t.replace(/'/g,"\\'")+'\')">'+t+'</span>').join('')||'<span class="br-empty">— move taxa here —</span>';
+  const aLabel=S.activeCodes.map(c=>clbl(c)).join('; ');
+  const bLabel=S.activeCodes.length===1?('not '+clbl(S.activeCodes[0])):'';
+  const ready=S.aTaxa.length>0&&S.bTaxa.length>0;
+  ed.innerHTML=
+    '<div class="bsh">Active characters (present → branch A)</div>'+
+    '<div class="se-codes">'+pills+'</div>'+
+    '<div class="br-ed"><div class="br-hd a">Branch A — character present <span class="br-count">'+S.aTaxa.length+'</span></div>'+
+      '<div class="br-taxa">'+aTxt+'</div>'+
+      '<textarea class="br-txt at" id="atxt" placeholder="couplet text (auto-filled, editable)" oninput="this._edited=true">'+aLabel+'</textarea></div>'+
+    '<div class="br-ed"><div class="br-hd b">Branch B — character absent <span class="br-count">'+S.bTaxa.length+'</span></div>'+
+      '<div class="br-taxa">'+bTxt+'</div>'+
+      '<textarea class="br-txt bt2" id="btxt" placeholder="couplet text (auto-filled, editable)" oninput="this._edited=true">'+bLabel+'</textarea></div>'+
+    '<div class="se-hint">Tap a taxon to move it between branches. Confirm when both branches are non-empty.</div>'+
+    '<div class="se-actions">'+
+      '<button class="confirm" '+(ready?'':'disabled')+' onclick="confirmCouplet()">Confirm couplet ✓</button>'+
+      '<button class="clr" onclick="S.activeCodes=[];computeSplit();renderBuild()">Clear</button>'+
+      (!canSplit?'<button class="indist-btn" onclick="markIndistinguishable()">Mark as indistinguishable group</button>':'')+
+    '</div>';
+}
+function renderTree(){
+  const body=document.getElementById('tree-body');
+  const nums=assignNums();
+  document.getElementById('tree-stats').textContent=Object.keys(S.nodes).length+' couplets';
+  if(!S.root){body.innerHTML='<div class="tree-empty">No couplets yet. Confirm the first split to begin the key.</div>';return;}
+  let h='';
+  const bfs=[S.root];
+  while(bfs.length){
+    const id=bfs.shift();const nd=S.nodes[id];if(!nd)continue;
+    const n=nums[id];
+    const aD=branchDesc(nd,'a',nums), bD=branchDesc(nd,'b',nums);
+    const fmt=(d)=>{ if(d.kind==='leaf')return '<span class="kbr2">'+d.text+'</span>'; if(d.kind==='group')return '<span class="kbr2 indist">'+d.text+'</span>'; if(d.kind==='next')return '<span class="kbn">'+d.text+'</span>'; return '<span class="kbn">(pending)</span>'; };
+    h+='<div class="kc"><div class="kc-top"><span class="kn">'+n+'</span></div>'+
+      '<div class="kbr"><span class="kbl a">a.</span><span class="kbt">'+nd.aText+' '+fmt(aD)+'</span></div>'+
+      '<div class="kbr"><span class="kbl b">b.</span><span class="kbt">'+nd.bText+' '+fmt(bD)+'</span></div></div>';
+    if(nd.aChild)bfs.push(nd.aChild);
+    if(nd.bChild)bfs.push(nd.bChild);
+  }
+  if(S.queue.length){ h+='<hr class="ksep"><div class="kpend">'+S.queue.length+' branch(es) still to resolve…</div>'; }
+  body.innerHTML=h;
+}
+
+// ── DONE ──
+function renderDone(){
+  const nums=assignNums();
+  const treeHtml=exportPlain().split('\n').slice(4).join('\n');
+  document.getElementById('p-done').innerHTML=`
+    <div class="done-hd"><h2>${S.keyName||autoName()}</h2>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--ink3)">${Object.keys(S.profiles).length} taxa · ${S.totalFrags} fragments · ${Object.keys(S.nodes).length} couplets</span></div>
+    <div class="done-body">
+      <div class="done-tree">
+        <div class="done-tree-hd">Generated key</div>
+        <pre style="font-family:var(--mono);font-size:12px;line-height:1.7;white-space:pre-wrap;color:var(--ink)">${treeHtml.replace(/</g,'&lt;')}</pre>
+      </div>
+      <div class="done-side">
+        <div class="exp-card"><h4>Use this key</h4><p>Navigate the key interactively to determine a fragment.</p>
+          <button class="expb" onclick="enterNav()">🧭 Navigate key</button></div>
+        <div class="exp-card"><h4>Save this key</h4><p>Download the JSON file — this is your permanent, portable archive. Keep it with your data (e.g. <span style="font-family:var(--mono);font-size:11px">${(S.keyName||autoName())}.json</span>).</p>
+          <button class="expb" onclick="exportJSONfile()">💾 Download key (JSON)</button></div>
+        <div class="exp-card"><h4>Publish</h4><p>Plain-text key, ready to paste into a paper or report.</p>
+          <button class="expb sec" onclick="openExport()">📄 Plain text</button></div>
+      </div>
+    </div>`;
+}
+
+// ── NAV (use a key) ──
+function buildNavModel(){
+  // Build a navigable model from current S.nodes/root, OR from a loaded JSON
+  if(S.loadedKey){ return S.loadedKey; }
+  // from live nodes:
+  const nums=assignNums();
+  const couplets={};
+  for(const id in S.nodes){
+    const nd=S.nodes[id];
+    couplets[nums[id]]={
+      a:{text:nd.aText, result:nd.aLeaf, group:nd.aGroup, next:nd.aChild?nums[nd.aChild]:null},
+      b:{text:nd.bText, result:nd.bLeaf, group:nd.bGroup, next:nd.bChild?nums[nd.bChild]:null},
+    };
+  }
+  return {keyName:S.keyName||autoName(), area:S.area, couplets, _root:nums[S.root]||1};
+}
+function enterNav(){
+  S.phase='nav';
+  const model=buildNavModel();
+  S.navModel=model;
+  S.navCur=model._root||1;
+  S.navPath=[];
+  render();
+}
+function navChoose(branch){
+  const c=S.navModel.couplets[S.navCur];
+  const br=c[branch];
+  S.navPath.push({couplet:S.navCur, branch, text:br.text});
+  if(br.next){ S.navCur=br.next; }
+  else { S.navCur=null; S.navResult=br.result?{kind:'taxon',v:br.result}:(br.group?{kind:'group',v:br.group}:{kind:'taxon',v:'(unresolved)'}); }
+  renderNav();
+}
+function navReset(){ S.navCur=S.navModel._root||1;S.navPath=[];S.navResult=null;renderNav(); }
+function renderNav(){
+  const m=S.navModel; if(!m){S.phase='setup';render();return;}
+  const crumb=S.navPath.map(p=>'<span>'+p.couplet+p.branch+'</span>').join('');
+  let body;
+  if(S.navCur===null){
+    const r=S.navResult;
+    const isG=r.kind==='group';
+    body=`<div class="nav-result ${isG?'indist':''}"><div class="lbl">${isG?'Indistinguishable group':'Determination'}</div>
+      <div class="taxon ${isG?'indist':''}">${isG?r.v.join(' / '):r.v}</div></div>
+      <div style="text-align:center"><button class="clr" onclick="navReset()">↻ Start over</button></div>`;
+  } else {
+    const c=m.couplets[S.navCur];
+    const bdesc=(br)=>br.next?('→ couplet '+br.next):(br.result?('= '+br.result):(br.group?('= '+br.group.join(' / ')):'?'));
+    body=`<div class="nav-couplet"><div class="nav-q">Couplet ${S.navCur}</div>
+      <div class="nav-choices">
+        <button class="nav-ch" onclick="navChoose('a')"><span class="nav-ch-k">a</span><span class="nav-ch-t">${c.a.text}</span><span class="kbn">${bdesc(c.a)}</span></button>
+        <button class="nav-ch" onclick="navChoose('b')"><span class="nav-ch-k">b</span><span class="nav-ch-t">${c.b.text}</span><span class="kbn">${bdesc(c.b)}</span></button>
+      </div></div>
+      ${S.navPath.length?'<div style="text-align:center"><button class="clr" onclick="navReset()">↻ Restart</button></div>':''}`;
+  }
+  document.getElementById('p-nav').innerHTML=`<div class="nav-wrap">
+    <div class="nav-hd"><h2>${m.keyName}</h2><button class="hb" style="background:var(--ivory);border:1px solid var(--wire);color:var(--ink2)" onclick="S.phase=S.loadedKey?'setup':'done';S.loadedKey=null;render()">← Back</button></div>
+    <div class="nav-crumb">${crumb||'<span style="opacity:.5">start</span>'}</div>
+    ${body}</div>`;
+}
+
+// ── EXPORT MODAL ──
+function openExport(){ document.getElementById('modal-title').textContent='Plain-text key';document.getElementById('modal-ta').value=exportPlain();document.getElementById('modal').classList.add('open'); }
+function closeModal(){ document.getElementById('modal').classList.remove('open'); }
+function copyExport(){ const ta=document.getElementById('modal-ta');ta.select();document.execCommand('copy');showToast('Copied'); }
+function exportJSONfile(){
+  const j=keyJSON();
+  const blob=new Blob([JSON.stringify(j,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(S.keyName||autoName())+'.json';a.click();
+  showToast('JSON downloaded');
+}
+
+// ── NEW ──
+function newKey(){
+  if((S.phase==='build'||S.phase==='done')&&!confirm('Start a new key? Current unsaved key will be lost.'))return;
+  S={phase:'setup',keyName:'',area:S.area,Nmin:3,theta:0.60,records:[],sites:[],profiles:{},taxonN:{},totalFrags:0,
+     nodes:{},root:null,nc:0,qc:0,queue:[],cur:null,history:[],activeCodes:[],aTaxa:[],bTaxa:[],secFilter:'ALL',navPath:[],navCur:null};
+  render();
+}
+
+// ── wiring ──
+document.getElementById('file-input').addEventListener('change',e=>{if(e.target.files.length)readFiles(e.target.files);e.target.value='';});
+document.getElementById('json-input').addEventListener('change',e=>{if(e.target.files[0])loadKeyFile(e.target.files[0]);e.target.value='';});
+document.getElementById('h-name').addEventListener('input',e=>{S.keyName=e.target.value;});
+render();
+</script>
+</body>
+</html>
